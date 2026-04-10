@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import plotly.graph_objects as go
+import plotly.express as px
 
 st.set_page_config(
     page_title="US Veterinary Health Market Dashboard",
@@ -14,7 +15,7 @@ st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "Navigate to:",
-    ["Market Overview", "Market Trends", "Competitive Landscape", "Google Trends", "Industry News"]
+    ["Market Overview", "Market Trends", "Clinic Map", "Competitive Landscape", "Google Trends", "Industry News"]
 )
 
 st.title("US Veterinary Health Market Dashboard")
@@ -105,6 +106,155 @@ if page == "Market Trends":
         st.plotly_chart(fig3, use_container_width=True)
 
     st.markdown("---")
+
+if page == "Clinic Map":
+    st.header("US Veterinary Clinic Map")
+    st.markdown("Explore over 10,000 veterinary clinics across the United States")
+
+    import pandas as pd
+
+    @st.cache_data
+    def load_clinic_data():
+        return pd.read_csv("all_us_clinics.csv")
+
+    clinic_df = load_clinic_data()
+    st.write("Loaded " + str(len(clinic_df)) + " clinics")
+
+    clinic_df["state"] = clinic_df["search_city"].apply(lambda x: x.split(", ")[-1] if ", " in str(x) else "Unknown")
+
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+    with filter_col1:
+        type_filter = st.multiselect(
+            "Filter by ownership type:",
+            options=clinic_df["ownership_type"].unique(),
+            default=clinic_df["ownership_type"].unique()
+        )
+
+    with filter_col2:
+        state_list = sorted(clinic_df["state"].unique())
+        state_filter = st.multiselect(
+            "Filter by state:",
+            options=state_list,
+            default=state_list
+        )
+
+    with filter_col3:
+        owner_options = sorted(clinic_df["owner"].unique())
+        owner_filter = st.multiselect(
+            "Filter by owner:",
+            options=owner_options,
+            default=owner_options
+        )
+
+    filtered_clinics = clinic_df[
+        (clinic_df["ownership_type"].isin(type_filter)) &
+        (clinic_df["owner"].isin(owner_filter)) &
+        (clinic_df["state"].isin(state_filter))
+    ]
+
+    if len(filtered_clinics) > 0:
+        fig_map = px.scatter_mapbox(
+            filtered_clinics,
+            lat="lat",
+            lon="lon",
+            hover_name="name",
+            hover_data={
+                "owner": True,
+                "parent_company": True,
+                "ownership_type": True,
+                "address": True,
+                "lat": False,
+                "lon": False
+            },
+            color="ownership_type",
+            color_discrete_map={
+                "Corporate Chain": "#e74c3c",
+                "Private Equity": "#3498db",
+                "Emergency/Specialty": "#2ecc71",
+                "Independent": "#95a5a6"
+            },
+            zoom=3,
+            center={"lat": 39.8283, "lon": -98.5795},
+            height=700,
+            mapbox_style="open-street-map"
+        )
+        fig_map.update_traces(marker=dict(size=10))
+        fig_map.update_layout(
+            title="Veterinary Clinics Across the US (" + str(len(filtered_clinics)) + " clinics shown)",
+            margin=dict(l=0, r=0, t=40, b=0),
+            dragmode="zoom"
+        )
+
+        config = {
+            "scrollZoom": True,
+            "displayModeBar": True,
+            "modeBarButtonsToAdd": ["zoom2d", "pan2d", "resetScale2d"]
+        }
+        st.plotly_chart(fig_map, use_container_width=True, config=config)
+    else:
+        st.warning("No clinics match your filters.")
+
+    st.markdown("---")
+
+    st.subheader("Clinic Summary")
+
+    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
+    with sum_col1:
+        st.metric("Total Clinics Shown", len(filtered_clinics))
+    with sum_col2:
+        st.metric("Corporate/Chain", len(filtered_clinics[filtered_clinics["ownership_type"] == "Corporate Chain"]))
+    with sum_col3:
+        st.metric("Private Equity", len(filtered_clinics[filtered_clinics["ownership_type"] == "Private Equity"]))
+    with sum_col4:
+        st.metric("Independent", len(filtered_clinics[filtered_clinics["ownership_type"] == "Independent"]))
+
+    st.dataframe(
+        filtered_clinics[["name", "address", "phone", "owner", "parent_company", "ownership_type"]],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown("")
+    st.info("**Note:** Approximately 7-10% of clinics labeled as Independent may be owned by private equity groups that retain the original clinic branding. Ownership data is verified through clinic name and website matching against known corporate and PE-backed veterinary groups.")
+
+    if len(filtered_clinics) > 0:
+        own_col1, own_col2 = st.columns(2)
+
+        with own_col1:
+            type_counts = filtered_clinics["ownership_type"].value_counts()
+            fig_own = go.Figure()
+            fig_own.add_trace(go.Pie(
+                labels=type_counts.index.tolist(),
+                values=type_counts.values.tolist(),
+                hole=0.4,
+                textinfo="label+percent+value",
+                marker=dict(colors=["#e74c3c", "#3498db", "#2ecc71", "#95a5a6", "#f39c12", "#9b59b6"])
+            ))
+            fig_own.update_layout(
+                title="Clinic Ownership Breakdown",
+                template="plotly_white",
+                height=400
+            )
+            st.plotly_chart(fig_own, use_container_width=True)
+
+        with own_col2:
+            top_owners = filtered_clinics[filtered_clinics["ownership_type"] != "Independent"]["owner"].value_counts().head(10)
+            if len(top_owners) > 0:
+                fig_top = go.Figure()
+                fig_top.add_trace(go.Bar(
+                    x=top_owners.values.tolist(),
+                    y=top_owners.index.tolist(),
+                    orientation="h",
+                    marker_color="#3498db"
+                ))
+                fig_top.update_layout(
+                    title="Top 10 Corporate/PE Owners by Clinic Count",
+                    template="plotly_white",
+                    height=400,
+                    yaxis=dict(autorange="reversed")
+                )
+                st.plotly_chart(fig_top, use_container_width=True)
 
 if page == "Competitive Landscape":
     st.header("Competitive Landscape")
