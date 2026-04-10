@@ -5,6 +5,7 @@ cachetools==7.0.5
 certifi==2026.2.25
 charset-normalizer==3.4.7
 click==8.3.2
+et_xmlfile==2.0.0
 gitdb==4.0.12
 GitPython==3.1.46
 idna==3.11
@@ -15,6 +16,7 @@ lxml==6.0.2
 MarkupSafe==3.0.3
 narwhals==2.19.0
 numpy==2.4.4
+openpyxl==3.1.5
 packaging==26.0
 pandas==3.0.2
 pillow==12.2.0
